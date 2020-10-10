@@ -1,0 +1,426 @@
+---
+title: "Assignment-1"
+author: "Shubhangi Srivastava "
+date: "September 25, 2019"
+output:
+  pdf_document: default
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Problem 3
+
+### (a) Summarize the main statistics of all the variables in the data set.
+
+```{r loadData, echo=TRUE}
+?attitude
+#See the structure of the dataset
+str(attitude)
+
+#using summary 
+summary(attitude)
+```
+
+```{undefinedextra_ways, eval=FALSE, include=FALSE}
+#using sapply - Summarizes over given function sapply(data, function)
+sapply(attitude, mean)
+sapply(attitude, median)
+#using fivenum  - provides 5 descriptive statistics (Tukey min,lower-hinge, median,upper-hinge,max)
+?fivenum
+fivenum(attitude$rating)
+attributes(attitude)
+```
+
+### (b) How many observations are in the attitude dataset? What function in R did you use to display this information?
+
+``` {r count, echo = TRUE }
+library('dplyr')
+glimpse(attitude)
+
+#using dim
+dim(attitude)
+```
+
+There are 30 observations in the dataset. There are multiple ways to show this , we have used **glimpse** from **dplyr** Other ways are using **dim** and **nrow**.
+
+### (c) Produce a scatterplot matrix of the variables in the attitude dataset. What seems to be most correlated with the overall rating?
+
+``` {r scatter_plot_3 , echo = TRUE} 
+color_options <- c("#c6cbff", "#ccffc7", "#ff7bf2", "#69dce6", "#87e882", "#ebe172", "#ed7a2e", "#f07a6a")
+pairs(attitude,lower.panel = NULL, pch = 19, col = color_options, main = "Scatterplots matrix for attitude")
+```
+
+
+Rating seem to be most correlated with **complaints**.
+
+
+### (d) Produce a scatterplot of rating (on the y-axis) vs. learning (on the x-axis). Add a title to the plot using the title() function.
+
+``` {r addTitle , echo = TRUE}
+plot(attitude$learning, attitude$rating, xlab = "Learning" , ylab = "Rating", type = "p", col = "aquamarine4")
+title("Relationship between Rating and Learning")
+```
+
+### (e) Produce 2 side-by-side histograms, one for rating and one for learning. You will need to use par(mfrow=...) to get the two plots together.
+
+```{r side_by_side_3, echo= TRUE}
+par(mfrow= c(1,2))
+
+hist(attitude$rating, xlab = "Rating", cex.main = 1.5,ylab = "frequency", border = NULL, main="Rating Frquency Chart", col = "aquamarine3")
+hist(attitude$learning, xlab = "Learning", ylab = "frequency",border = NULL, main="Learning Frquency Chart", col = "aquamarine4")
+```
+
+## Problem 4
+
+### (a) Make a frequency distribution table for the gender variable to see the frequency distribution.
+
+``` {r read_Data_4, echo = FALSE}
+# Read excel file
+library(readxl)
+library(ggplot2)
+question4 <- read_excel("/Users/pawanjeetkaur/Downloads/IDS-572 DataMining/assignment_1/hw1.xls")
+
+theme_remove = theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black"))
+
+#change the col names to appropriate names
+colnames(question4) <- c('weight', 'height','gender','days', 'regular', 'fast_food_count')
+```
+
+```{r freq_dist , echo = TRUE}
+bar_gender_data <- table(question4$gender)
+bar_gender_data
+```
+
+### (b) Make a bar chart for gender variable.
+
+``` {r bar_chart_4, echo = TRUE}
+barplot(bar_gender_data, main = "Frequency distribution for Gender", xlab="Gender", ylab= "Frequency", horiz = FALSE, col = "aquamarine3")
+```
+
+### (c) Make a histogram to display the distribution of the Height variable.
+``` {r hist_chart_4, echo = TRUE}
+hist(question4$height, xlab = "Height", ylab = "Frequency", border = NULL, main="Histogram for Height", col = "aquamarine3")
+```
+
+### (d) Make a cluster bar chart (side-by-side bar chart) to examine the correlation between gender and Ate Fried Food variables.
+``` {r cluster_bar_4, echo = TRUE}
+df2 = xtabs(~ gender + fast_food_count , data=question4)
+barplot(df2 ,beside = TRUE, col = c("aquamarine4", "brown"), main = "Side-by-Side cluster chart: Gender and Fast Food variable")
+```
+
+### (e) Make a scatter plot to examine the correlation between Weight and Height variables, and write a sentence to describe the trend you observed from the scatter plot.
+
+``` {r scatter_plot_4 , echo = TRUE}
+plot(question4$weight,question4$height, xlab = "Height" , ylab = "Weight", col = "aquamarine4", ylim = c(0,120))
+abline(lm(question4$height~question4$weight))
+```
+
+**We observed strong linear relation between two variables with little outliers between 100 -150 height and 60 -80 weight.**
+
+
+
+### (f) Find the 5-number summary for the Height data and make a boxplot for the Height data with mild and extreme outliers identified using inner and outer fences. Draw the boxplot.
+
+``` {r fenced_boxplot, echo = TRUE}
+fivenum(question4$height)
+```
+
+``` {r intialiser, echo = FALSE}
+iqr_range<-quantile(question4$height)[4] - quantile(question4$height)[2]
+
+fence_in<-1.5*iqr_range
+fence_out<-3*iqr_range
+```
+
+``` {r boxplot_fenced , echo = TRUE}
+library(ggplot2)
+ggplot(question4,aes(y=height)) + 
+  geom_boxplot() + ylim(0,100) + 
+  geom_hline(size=1.5,linetype='dashed',aes(yintercept=(quantile(question4$height)[2] - fence_in),
+                          ,col="inner_fence")) +
+  geom_hline(size=1.5,linetype='dashed',aes(yintercept=(quantile(question4$height)[4] + fence_in),
+                          ,col="inner_fence")) +
+  geom_hline(size=1.5,linetype='dashed',aes(yintercept=(quantile(question4$height)[2] - fence_out),
+                          ,col="outer_fence")) +
+  geom_hline(size=1.5,linetype='dashed',aes(yintercept=(quantile(question4$height)[4] + fence_out),
+                          ,col="outer_fence")) +
+  ggtitle("Box Plot for Height") + ylab("Height") +
+  scale_color_manual(values = c(inner_fence = "aquamarine3", outer_fence = "aquamarine4")) +
+  theme_remove
+```
+
+## Problem 5
+
+### (a) All the variables are represented as integer. Write your own function that automatically converts all the integer variables to factors (categorical).
+
+``` {r learn_data , echo = TRUE}
+library(MASS)
+attach(birthwt)
+str(birthwt)
+
+?birthwt
+dim(birthwt)
+```
+
+```{r write_function, echo = TRUE}
+convertSingleColToFactor <- function(column) {
+  as.factor(column)
+}
+
+converted_dataset = birthwt
+converted_dataset[,c(1,4,5,6,7,8,9)] = lapply(birthwt[,c(1,4,5,6,7,8,9)], convertSingleColToFactor)
+str(converted_dataset)
+```
+
+
+### (b) Repeat part (a) using mutate() and mapvalues() functions.
+
+```{r usingMutate , echo=TRUE}
+library(plyr)
+mutate(birthwt, 
+       race = as.factor(mapvalues(race , c("white", "black", "other"), c("1","2", "3"))),
+       smoke =as.factor(mapvalues(smoke , c("no", "yes"), c("0","1"))),
+       ptl = as.factor(mapvalues(ptl , c("no", "yes"), c("0","1"))),
+       ht = as.factor(mapvalues(ht , c("no", "yes"), c("0","1"))),
+       ui = as.factor(mapvalues(ui , c("no", "yes"), c("0","1"))),
+       ftv = as.factor(mapvalues(ftv , c("no", "yes"), c("0","1"))),
+       low = as.factor(mapvalues(low , c("no", "yes"), c("0","1"))))
+
+```
+
+### (c) Use the tapply() function to see what the average birthweight looks like when broken down by race and smoking status. Does smoking status appear to have an effect on birth weight? Does the effect of smoking status appear to be consistent across racial groups? What is the association between race and birth weight?
+
+```{r tapply, echo = TRUE}
+t_output <- tapply(converted_dataset$bwt, INDEX = list(converted_dataset$race, converted_dataset$smoke), mean)
+rownames(t_output)<-c("Race-White","Race-black","Race-others")
+colnames(t_output)<-c("Non-Smoker","smokers")
+
+t_smoke <- tapply(converted_dataset$bwt, INDEX = list(converted_dataset$smoke), mean)
+rownames(t_smoke)<-c("Non-Smoker","Smokers")
+t_race <- tapply(converted_dataset$bwt, INDEX = list(converted_dataset$race), mean)
+rownames(t_race)<-c("Race-White","Race-black","Race-others")
+
+t_output
+
+t_smoke
+
+t_race
+```
+
+**Non-Smokers average birth weight seems to higher than the smokers.So,there is an effect of smoking on average birthweight.**
+**From the first table we can see that there is very less difference in smokers column across all racial groups**
+**Based on table 3 we can see that race white has highest birthweight and decreases with race black and others group**
+
+### (d) Use kable() function from knitr to dispaly the table you get in part (c)
+
+```{r kable_5 , echo= TRUE}
+library(knitr)
+library(kableExtra)
+kable(t_output) %>% kable_styling(bootstrap_options = c("striped", "hover"), font_size =  10.5 )
+```
+
+### (e) Use ddply() function to get the average birthweight by mother’s race and compare it with tapply() function.
+
+```{r ddply_tapply_5, echo= TRUE}
+library(plyr)
+ddplyoutput <- ddply(converted_dataset, ~ race, summarize, mean_score = mean(bwt))
+str(ddplyoutput)
+ddplyoutput
+
+#comparing with tapply
+mean_compre <- tapply(converted_dataset$bwt , INDEX= list(converted_dataset$race), mean)
+str(mean_compre)
+mean_compre
+```
+
+### (f) Use ggplot2() to plot the average birthweight (computed in part (e)) for each race group in a bar plot.
+
+```{r ggplot_2_btwt_race, echo=TRUE}
+library(ggplot2)
+
+ggplot(data = ddplyoutput, aes(x = ddplyoutput$race, y = ddplyoutput$mean_score)) + 
+  geom_bar(stat = "identity", fill = 'aquamarine3') +  
+  xlab ( "Race") + ylab ( "Mean Score") + 
+  
+  theme_remove
+```
+
+### (g) - (h) Use ddply() function to look at the average birthweight and proportion of babies with low birthweight broken down by smoking status.
+
+``` {r plot_2_avg_5 , echo= TRUE}
+table_g<-ddply(converted_dataset, ~ smoke, summarize,
+               avg_wt = mean(bwt),
+               low_birth_prop = mean(low == 1))
+
+table_g
+```
+
+### (i) Is the mother’s age correlated with birth weight? Does the correlation vary with smoking status?
+
+``` {r plot_2_i_5 , echo= TRUE}
+ggplot(converted_dataset,aes(age,bwt,smoke)) + geom_point(aes(color=smoke)) + 
+  xlab("Mom's Age") + ylab("Birth weight") +
+  geom_smooth(method='lm',fill='orange',col='black') +
+  ggtitle("Correlation between Mother's Age and Birth Weight")+
+  theme(panel.grid=element_blank(),panel.background = element_blank(),
+        axis.line = element_line(colour = "black"))
+```
+
+```{r core_matrix, echo= TRUE} 
+with(birthwt,cor(bwt,age))
+ddply(birthwt,~smoke,summarize,cor.age=cor(bwt,age))
+```
+
+**Based on the graph above smoking does have correlation with birth weight.As most of the data related to smokers lies below the regression line.But birthweight and mothe's age are not strongly corelated as we can see from the table of correlation values.**
+
+## Problem 6
+
+### (a) What type of variable is price? Would you expect its distribution to be symmetric, right-skewed, or left-skewed? Why? Make a histogram of the distribution of diamond prices. Does the shape of the distribution match your expectation? (Use geom histogram()).
+
+```{r load_data_ques_6, echo = TRUE}
+library(ggplot2)
+
+summary(diamonds$price)
+typeof(diamonds$price)
+```
+
+**Based on the summary of diamonds dataset, we expect data to right skewed as the mean of the price is skewed towards maximum value away from the Median.**
+
+```{r histo_ques_6 , echo = TRUE }
+ggplot(data = diamonds, aes(x = price), show.legend = TRUE) + 
+ geom_histogram( fill = "aquamarine4" ) +
+  xlab("Price") + ylab("Frequency") +
+ ggtitle("Distribution of Diamond price") +
+ theme_remove
+```
+
+### (b) Visualize a few other numerical variables in the dataset and discuss any interesting features. When describing distributions of numerical variables we might also want to view statistics like mean, median, etc.
+
+```{r extra_plots_6, echo = TRUE}
+# First based on carot
+ggplot(data = diamonds,aes(carat)) + 
+  geom_histogram(fill='grey',bins = 25)+
+  geom_vline(size=1.6,linetype='dashed', aes(xintercept = mean(diamonds$carat), color = "Mean")) +
+  geom_vline(size=1.6, aes(xintercept = median(diamonds$carat), color = "Median")) +
+  scale_color_manual(values = c(Mean= "aquamarine4", Median = "pink"))+
+  theme_remove
+
+# Second based on length
+ggplot(data = diamonds,aes(x)) + 
+  geom_histogram(fill='grey',bins = 25)+
+  ggtitle( "Analysis of Depth variable")+
+  geom_vline(size=1.6,linetype='dashed', aes(xintercept = mean(diamonds$x), color = "Mean")) +
+  geom_vline(size=1.6, aes(xintercept = median(diamonds$x), color = "Median")) +
+  scale_color_manual(values = c(Mean= "aquamarine4", Median = "pink"))+
+  theme_remove
+
+# Third based on depth percentage
+ggplot(data = diamonds,aes(depth)) + 
+  geom_histogram(fill='grey',bins = 25)+
+  geom_vline(size=1.6,linetype='dashed', aes(xintercept = mean(diamonds$depth), color = "Mean")) +
+  geom_vline(size=1.6, aes(xintercept = median(diamonds$depth), color = "Median")) +
+  scale_color_manual(values = c(Mean= "aquamarine4", Median = "pink"))+
+  theme_remove
+```
+
+**Based on the first graph, mean is slight moved to right side away from median showing.The data is right skewed**
+
+### (c) What type of variable is color? Which color is most prominently represented in the dataset?
+
+```{r color_test_ques_6, echo = TRUE}
+typeof(diamonds$color)
+str(diamonds$color)
+table(diamonds$color)
+```
+
+**Color G is highest hence most prominently represented in diamonds dataset**
+
+### (d) Make a bar plot of the distribution of cut, and describe its distribution (Use georm bar())
+
+```{r georm_bar_ques_6, echo = TRUE}
+ggplot(data = diamonds, aes(x = cut), show.legend = TRUE) + geom_bar(fill = "aquamarine4") +
+  ggtitle("Bar chart for Diamond Cuts") +
+  xlab("Diamaond Cut") + ylab("Count") +
+  theme_remove
+```
+
+```{r table_dist_ques_6_cut , echo = TRUE}
+table(diamonds$cut)
+```
+
+**Ideal Cut diamonds has the highest count in given dataset**
+
+### (e) Make a histogram of the depths of diamonds, with binwidth of 0.2%, and add another variable (say, cut) to the visualization. You can do this either using an aesthetic or a facet. Typical diamonds of which cut have the highest depth? On average, does depth increase or decrease as cut grade increase or decrease?
+
+```{r depth_hist_ques_6 , echo = TRUE}
+plot_1 <- ggplot(data = diamonds, aes(x = depth), show.legend = TRUE) + 
+  geom_histogram(binwidth = 0.2, fill = "aquamarine4") +
+  ggtitle("Depth of Diamonds - cut") +
+  xlab("Depth of Diamonds") +
+  ylab("Cut of Diamonds")
+  theme_remove
+plot_1 + facet_grid(~cut, space= "fixed")
+```
+
+```{r , echo = TRUE}
+# with aesthetics
+ggplot(data = diamonds, aes(x = depth, fill = cut), col ="black", show.legend = TRUE) +
+  geom_histogram(binwidth = 0.2) +
+  ggtitle("Depth of Diamonds - cut") +
+  xlab("Depth of Diamonds") +
+  ylab("Cut of Diamonds") +
+  theme_remove
+```
+
+**Fair Cut has highest depth. On average, depth decreases as the cut quality of the diamond increases.**
+
+
+### (f) Compare the distribution of price for the different cuts. Does anything seem unusual? Describe
+
+```{r hist_compre_6 , echo = TRUE}
+ggplot(data = diamonds, aes(y = price, x = cut), col ="black", show.legend = TRUE) +
+  geom_boxplot(outlier.colour="aquamarine4", outlier.shape=25,
+             outlier.size=2, notch=TRUE) +
+  ggtitle("Price Vs Cut") +
+  theme_remove 
+```
+
+**Above box plots show there are many outliers for all cut types**
+
+### (g) Draw a scatterplot showing the price (y-axis) as a function of the carat (size).
+
+```{r scatter_ques_6 , echo = TRUE}
+ggplot(diamonds, aes(x=carat, y=price)) + 
+  ggtitle("Scatter plots for Price and Carat") +
+  xlab("Diamond Carat")+
+  ylab("Diamond Price") +
+  geom_point(color = "aquamarine3" ) + 
+  theme_remove
+```
+
+### (h)  Shrink the points in your scatter plot in part (g) using the alpha argument in geom point.
+
+```{r scatter_with_alpha_ques_6 , echo = TRUE}
+ggplot(diamonds, aes(x=carat, y=price)) + 
+  ggtitle("Scatter plots for Price and Carat") +
+  xlab("Diamond Carat")+
+  ylab("Diamond Price") +
+  geom_point(color = "aquamarine3", alpha = "0.5" )+ 
+  theme_remove
+```
+
+### (i) Use facet wrap(∼ factor1 + factor2 + ... + factorn) command to create scatter plots showing how diamond price varies with carat size for different values of “cut” (use colour = color in aes()).
+
+```{r scatter_facet_wrap_ques_6 , echo = TRUE}
+plot_2 <- ggplot(diamonds, aes(x=carat, y=price, color = factor(cut))) +
+  geom_point(alpha = "0.5", color = "aquamarine3") +
+  ggtitle("Scatter plots for Price and Carat") +
+  xlab("Diamond Carat")+
+  ylab("Diamond Price") +
+  theme_remove
+plot_2 + facet_wrap(~ cut)
+```
