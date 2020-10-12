@@ -1,0 +1,203 @@
+# Problem 3
+
+x1 <- c(1,2,2,0,1,0)
+x2 <- c(1,2,0,0,0,1)
+class <- c('blue', 'blue', 'blue', 'red','red','red')
+
+# (a) Plot these six training points. Are the classes f+; 􀀀g linearly separable?
+plot(x1, x2 , col = class)
+
+# Yes both class are linearly seperable
+
+# (b) Construct the weight vector of the maximum margin hyperplane by inspection and identify the support vectors.
+# p1 ( 0, 1.5) p2 -> (1.5, 0)
+# y = -x + b => b = y + x = 1.5 => x1 + x2 - 1.5 =0 
+slope = (1.5-0)/(0-1.5)
+intercept = 1.5
+
+abline(intercept,slope)
+
+# drawing margin
+slope2 = -1 
+intercept2 = 1
+abline(intercept2, slope2, lty=2)
+
+intercept3 = 2
+abline(intercept3, slope2, lty=2)
+
+#Weight vector
+# equation of line is x1 + x2 - 1.5 =0  , weight vector w (1,1)
+
+# (c) If you remove one of the support vectors does the size of the optimal margin decrease, stay the same, or increase? Explain.
+
+# there will not be any effect if we remove one of the support vector as the closest point 
+#which will give us the maximum margin plain will remain same.
+# whereas, removing more than one point can effect size of optimal margin.
+
+
+
+
+#Problem 1
+
+install.packages("readxl")
+library("readxl")
+Train_Multi <- read_excel("/Users/shubhangisrivastava/Downloads/TRD_Multi.xlsx")
+Train_Binary <- read_excel("/Users/shubhangisrivastava/Downloads/TRD_Binary.xlsx")
+Test_Multi <- read_excel("/Users/shubhangisrivastava/Downloads/TD_Multi.xlsx")
+Test_Binary <- read_excel("/Users/shubhangisrivastava/Downloads/TD_Binary.xlsx")
+
+# find columns with NA values
+countNAPercentage <- function(x) {
+  (sum(is.na(x))/nrow(Train_Binary))* 100
+}
+
+out <- as.data.frame(sapply(Train_Binary, countNAPercentage))
+
+countNAPercentage <- function(x) {
+  (sum(is.na(x))/nrow(Train_Multi))* 100
+}
+
+out <- as.data.frame(sapply(Train_Multi, countNAPercentage))
+
+# find columns with 9999 values
+
+
+count9999 <- function(x) {
+  count <- which(x == 9999)
+  (length(count)/nrow(Train_Binary))*100
+}
+
+index_9999 <- data.frame(sapply(Train_Binary, count9999))
+
+count9999 <- function(x) {
+  count <- which(x == 9999)
+  (length(count)/nrow(Train_Multi))*100
+}
+
+index_9999 <- data.frame(sapply(Train_Multi, count9999))
+
+# find columns with unknown values
+uk_data <- function(x) {
+  count <- which(toupper(x) == "UNKNOWN")
+  (length(count)/nrow(Train_Binary))*100
+}
+
+index_uk <- data.frame(sapply(Train_Binary, uk_data))
+
+
+uk_data <- function(x) {
+  count <- which(toupper(x) == "UNKNOWN")
+  (length(count)/nrow(Train_Multi))*100
+}
+
+index_uk <- data.frame(sapply(Train_Multi, uk_data))
+
+#find columns with distinct var
+
+count_distinct <- function(x) {
+  sd(x)
+}
+
+factor_col <- data.frame(sapply(Train_Binary,count_distinct ))
+
+
+count_distinct <- function(x) {
+  sd(x)
+}
+
+factor_col <- data.frame(sapply(Train_Multi, count_distinct))
+
+#adding new col
+
+Train_Multi$Promotor<- as.factor(as.numeric(Train_Multi$NPS_Status == "Promotor",1,0))
+library(dplyr)
+glimpse(Train_Multi)
+
+Train_Multi$Passive <- as.factor(ifelse(Train_Multi$NPS_Status == 'Passive', 1,0))
+library(dplyr)
+glimpse(Train_Multi)
+
+Train_Multi$Detractor<- as.factor(ifelse(Train_Multi$NPS_Status == 'Detractor',1,0))
+library(dplyr)
+glimpse(Train_Multi)
+
+#df <- dummy.data.frame(df, names=c(“NPS_Status”), sep="_") 
+
+#library(nnet)
+#Train_Multi$Promotor <- relevel(Train_Multi$Promotor, ref = "1")
+#model <- multinom(NPS_Status ~ Train_Multi$Promotor + Train_Multi$Passive + Train_Multi$Detractor, data=Train_Multi)
+#summary(model)
+#coefs <- coef(model)
+
+
+
+#Train_Multi$SN<- NULL
+#Train_Multi$State<- NULL
+#Train_Multi$Country<- NULL
+#Train_Multi$STATEZONE<- NULL
+#Train_Multi$AdmissionDate <- NULL
+#Train_Multi$DischargeDate <- NULL
+
+
+col_to_remove <- c("SN","AdmissionDate", "DischargeDate")
+
+for (colmn in col_to_remove){
+  Train_Binary[colmn]<- NULL
+  Train_Multi[colmn]<- NULL
+  Test_Binary[colmn]<- NULL
+  Test_Multi[colmn]<- NULL
+  }
+
+library(brglm2)
+#brglm <- glm(Promotor ~.-NPS_Status-Passive-Detractor, data = Train_Multi, family=binomial("logit"), method = "detect_separation")
+
+library(glmnet)
+glm_model<-glm(Promotor~.-Passive-Detractor-NPS_Status,data=Train_Multi,family = "binomial")
+summary(glm_model)
+
+
+glm_mod <- glm(formula= Promotor ~.-NPS_Status-Passive-Detractor, data = Train_Multi, family="binomial")
+
+df <-data.frame(glm_mod$coefficients)
+list <- which( abs(glm_mod$coefficients) > 10)
+View(list)
+
+glm_model<-glm(Passive~.-Promotor-Detractor-NPS_Status,data=Train_Multi,family = "binomial")
+summary(glm_model)
+glm_mod <- glm(formula= Passive ~.-NPS_Status-Promotor-Detractor, data = Train_Multi, family="binomial")
+summary(glm_model)
+list1 <- which( abs(glm_mod$coefficients) > 10)
+View(list1)
+
+library(glmnet)
+glm_model<-glm(Detractor~.-Passive-Promotor-NPS_Status,data=Train_Multi,family = "binomial")
+summary(glm_model)
+
+
+glm_mod <- glm(formula= Detractor ~.-NPS_Status-Passive-Promotor, data = Train_Multi, family="binomial")
+
+df <-data.frame(glm_mod$coefficients)
+list <- which( abs(glm_mod$coefficients) > 10)
+View(list)
+
+col_to_remove <- c("SN","AdmissionDate", "DischargeDate", "State","Country","BedCategory","MaritalStatus")
+
+for (colmn in col_to_remove){
+  Train_Binary[colmn]<- NULL
+  Train_Multi[colmn]<- NULL
+  Test_Binary[colmn]<- NULL
+  Test_Multi[colmn]<- NULL
+}
+
+var_to_conv <-c(8:42)
+
+var_to_conv
+for(i in var_to_conv){
+ Train_Multi[,i] <-factor(Train_Multi[,i],levels=1:4,labels = c("Poor","Fair","Good","Excellent"),ordered = T)
+}
+
+library(MASS)
+library(dplyr)
+detract_model<-glm(Detractor~.-Promotor-Passive-NPS_Status,data=Train_Multi,family = "binomial") %>%
+  stepAIC(trace = T)
+summary(Train_Multi)
