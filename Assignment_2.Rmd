@@ -1,0 +1,441 @@
+---
+
+output:
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**Question 4: Construct the best possible decision tree to predict the wine quality score. Explain how you have constructed your tree in details. Evaluate the performance of your decision tree using 10-fold cross validation. In a nutshell, you will first make a split of the provided data into 10 parts. Then hold out 1 part as the test set and use the remaining 9 parts for training. Train your decision tree using the training set and use the trained decision tree to classify entries in the test set. Repeat this process for all 10 parts, so that each entry will be used as the test set exactly once. To get the final accuracy value, take the average of the 10 folds accuracies (or other evaluation measures required).**
+
+```{r load_dataset, include=FALSE}
+#Reading Dataset
+wine = read.csv("~/Downloads/wineData.csv")
+colnames(wine) <- c('fa', 'va','ca','rs', 'chl', 'fsd', 'tsd', 'den','ph','sul','al','class')
+wine$class<-as.factor(wine$class)
+str(wine)
+```
+
+```{r data_cleaning , echo= TRUE}
+#Checking for Outliers using boxplot
+attach(mtcars)
+
+par(mfrow=c(3,4))
+boxplot(wine$fa, main='Fixed Acidity',ylab="Frequency")
+boxplot(wine$va, main='Volatile Acidity',ylab="Frequency")
+boxplot(wine$ca, main='Citric Acid', ylab = "Frequency")
+boxplot(wine$rs, main='Residual Sugar', ylab = "Frequency")
+boxplot(wine$chl, main='Chlorides', ylab = "Frequency")
+boxplot(wine$fsd, main='Free Sulphur Dioxide', ylab = "Frequency")
+boxplot(wine$tsd, main='Total Sulphur Dioxide', ylab = "Frequency")
+boxplot(wine$den, main='Density', ylab = "Frequency")
+boxplot(wine$ph, main='pH', ylab = "Frequency")
+boxplot(wine$sul, main='Sulphates', ylab = "Frequency")
+boxplot(wine$al, main='Alcohol', ylab = "Frequency")
+```
+
+```{r outlier_4 , echo = TRUE}
+#Removing Outliers
+library(dplyr)
+library(tidyr)
+library(purrr)
+
+outlierreplacement <- function(dataframe){
+  dataframe %>%          
+    map_if(is.numeric, ~ replace(.x, .x %in% boxplot.stats(.x)$out, NA)) %>%
+    bind_cols 
+}
+wine <- outlierreplacement(wine)
+wine <- na.omit(wine)
+```
+
+```{r split_data_4}
+#set.seed(1990)
+set.seed(180965)
+
+random_ordering<-runif(nrow(wine))
+wine = wine[order(random_ordering),]
+
+set.seed(12345)
+library(caTools)
+split = sample.split(wine,SplitRatio = 0.80)
+train_wine=subset(wine, split==TRUE)
+test_wine =subset(wine, split==FALSE)
+```
+
+**Using rpart and Information Gain**
+```{r  rpart_ig_4, echo=TRUE}
+library(rpart)
+fit1 <- rpart(class~., data = train_wine, parms=list(split="information"), method = "class")
+predict_test_wine1 <-predict(fit1, test_wine, type = 'class')
+predict_train_wine1 <-predict(fit1, train_wine, type = 'class')
+table_mat_train1 <- table(train_wine$class, predict_train_wine1)
+table_mat_train1
+accuracy_train1 <- sum(diag(table_mat_train1))/sum(table_mat_train1)
+accuracy_train1
+```
+
+**rpart with Gini**
+```{r rpart_gini_4, echo= TRUE}
+fit2 <- rpart(class~., data = train_wine, parms=list(split="gini"), method = "class")
+predict_test_wine2 <-predict(fit2, test_wine, type = 'class')
+predict_train_wine2 <-predict(fit2, train_wine, type = 'class')
+table_mat_train2 <- table(train_wine$class, predict_train_wine2)
+table_mat_train2
+accuracy_train2 <- sum(diag(table_mat_train2))/sum(table_mat_train2)
+accuracy_train2
+```
+
+**ctree**
+```{r ctree_4 , echo = TRUE}
+library(party)
+treec <- ctree(class~.,data = train_wine)
+tr <- predict(treec, test_wine)
+table_mat_1 <- table(test_wine$class, tr)
+# What is the accuracy of ctree model on the test data?
+accuracy <- sum(diag(table_mat_1))/sum(table_mat_1)
+accuracy
+```
+
+**Rpart has highest accuracy. Hence best decision model.**
+
+**Parameter Tuning**
+
+```{r param_tuning_4 , echo = TRUE}
+
+# Explore best minsplit
+library(e1071)
+library(rpart.plot)
+
+form <- formula(class ~.)
+
+min_split_rpart_4 <- tune.rpart(form, data=train_wine, minsplit=seq(10:100))
+min_split_rpart_4
+
+plot(min_split_rpart_4, main="Tune rpart on minsplit")
+
+val_min_split_4 <-unlist(min_split_rpart_4$best.parameters)
+val_min_split_4
+
+#Explore best cp
+
+tree_4 <- rpart(form, data = train_wine, control= rpart.control(minsplit=val_min_split_4))
+printcp(tree_4)
+plotcp(tree_4)
+rpart.plot(tree_4, extra =3)
+
+cp_value_min <- tree_4$cptable[which.min(tree_4$cptable[,"xerror"]),"CP"]
+pr_tree_3 <- rpart(form, data = train_wine, control=rpart.control(cp =cp_value_min, minsplit=val_min_split_4))
+
+rpart.plot(pr_tree_3)
+cp_value_min
+```
+
+**10 fold-Crossvalidation**
+
+```{r cv_10 , echo=TRUE}
+wineData<-wine[sample(nrow(wine)),] 
+wineData$Target <- wine$class
+
+library(ISLR)
+k <- 10
+nmethod <- 1
+folds <- cut(seq(1,nrow(wineData)),breaks=k,labels=FALSE) 
+models.err <- matrix(-1,k,nmethod, dimnames=list(paste0("Fold", 1:k), c("rpart")))
+
+  for(i in 1:k)
+  {
+    testIndexes <- which(folds==i, arr.ind=TRUE)
+    test_CV <- wineData[testIndexes, ]
+    train_CV <- wineData[-testIndexes, ]
+    
+    library(rpart)
+    wine_rpart <- rpart(Target~., data = train_CV, method="class", parms=list(split="information"),control = rpart.control(minsplit = 29, cp = 0.01312705))
+    predicted <- predict(wine_rpart, newdata = test_CV, type = "class")
+    models.err[i] <- mean(test_CV$Target != predicted)
+    predicted
+  }
+mean(models.err)
+Final_Accuracy=1-mean(models.err)
+Final_Accuracy
+```
+
+**Summary: Rpart with Info Gain gives the best decision tree with highest accuracy. Parameter tuning is done for cp and minsplit. Pruned decision tree is constructed with best cp and minsplit parameters. 10 fold crossvalidation is done with final accuracy of 76.4.**
+
+<br>
+
+***Question 5: The German Credit data set contains observations on 30 variables for 1000 past applicants for credit. Each applicant was rated as “good credit” or “bad credit”.***
+
+### (A) Explore the data: What is the proportion of “Good” to “Bad” cases? Obtain descriptions of the predictor (independent) variables mean, standard deviations, etc. for real-values attributes, frequencies of different category values. Look at the relationship of the input variables with the Target variable. Anything noteworthy in the data? Please include support (graphs, hypothesis testing, etc) for your observations.
+
+```{r loadDataset_5 , echo=TRUE}
+library(readxl)
+credit_data <- read_excel("/Users/pawanjeetkaur/Downloads/IDS-572 DataMining/Assignment_2/German Credit.xls")
+dim(credit_data)
+
+# Profit matrix
+profit <-  matrix(c(100, -500, 0, 0), 2)
+rownames(profit)<-c("Actual_1","Actual_0")
+colnames(profit)<-c("Pred_1","Pred_0")
+
+credit_data$RESPONSE <- as.factor(credit_data$RESPONSE)
+
+colnames(credit_data) <- c("obs","CHK_ACCT", "DURATION", "HISTORY", "new_car", "used_car", "furniture", "radio_tv", "education", "retraining", "amount", "saving_acct", "present_emp", "installment_rate", "male_div", "male_single", "male_sin_mar", "co_applicant", "guarantor", "present_resid", "real_estate","property", "age", "other_install","rent", "OWN_RES","n_credits", "job", "n_people", "telephone", "foreign", "RESPONSE")
+```
+
+```{r datacleaning_5, echo=TRUE}
+#library(mice)
+#md.pattern(credit_data)
+
+library(VIM)
+aggr_plot = aggr(credit_data, col = c('aquamarine4', 'brown3'), numbers = TRUE, prop = TRUE, 
+                 sortVars= TRUE, labels = names(credit_data), cex.axis = 1, gap = 0, 
+                 ylab = c("Histogram of missing data", "Pattern"))
+
+```
+
+**Running logisitic regression**
+
+```{r logisitic_5 , echo=TRUE}
+# Logisitic regression to find out input variables effecting response
+
+credit_data_glm0 <- glm(RESPONSE~., family = binomial, credit_data)
+#step(credit_data_glm0)
+
+summary(credit_data_glm0)
+
+# Running Logistic Regression for only the important variables
+credit_data_train_glm1<- glm(formula = RESPONSE ~ CHK_ACCT + DURATION + HISTORY + new_car + amount +
+                                saving_acct + installment_rate + male_single + guarantor + 
+                              other_install + foreign, family = binomial, 
+                            data = credit_data)
+
+#summary(credit_data_train_glm1)
+```
+
+**Based on above logisitic output, we will pick only important variables based on alpha value 5, 11 dependent variables are statistically significant**
+<br>
+```{r analysis_5 , echo = TRUE}
+prop.table(table(credit_data$RESPONSE))
+
+prop.table(table(credit_data$HISTORY))
+prop.table(table(credit_data$HISTORY,credit_data$RESPONSE))
+
+prop.table(table(credit_data$CHK_ACCT))
+prop.table(table(credit_data$CHK_ACCT,credit_data$RESPONSE))
+
+prop.table(table(credit_data$saving_acct))
+prop.table(table(credit_data$saving_acct,credit_data$RESPONSE))
+
+prop.table(table(credit_data$present_emp))
+prop.table(table(credit_data$present_emp,credit_data$RESPONSE))
+
+prop.table(table(credit_data$present_resid))
+prop.table(table(credit_data$present_resid,credit_data$RESPONSE))
+
+prop.table(table(credit_data$job))
+prop.table(table(credit_data$job,credit_data$RESPONSE))
+
+library(psych)
+
+par(mfrow = c(2,2))
+describe(credit_data$DURATION)
+boxplot(credit_data$DURATION, title = "duration")
+
+describe(credit_data$amount)
+boxplot(credit_data$amount, title = "Amount")
+
+describe(credit_data$age)
+boxplot(credit_data$age, title = "Age")
+
+credit_data <- credit_data[,c(2,3,4,5,11,12,14,16,19,24,31,32)]
+```
+
+### (b) Divide the data randomly into training (60%) and test (40%) partitions, and develop the “best” classification tree and random forest models to predict Good and Bad customers.Try to find the best values of the parameters needed in your models. In your decision tree model, what are the best nodes for classifying “Good” applicants? Output rules corresponding to these. Please explain why you chose these nodes.
+
+```{r run_models , echo = TRUE}
+#set.seed(180965)
+
+library(caTools)
+split = sample.split(credit_data,SplitRatio = 0.60)
+
+credit_train_data = as.data.frame(subset(credit_data, split == TRUE))
+credit_test_data = as.data.frame(subset(credit_data, split == FALSE))
+```
+
+**Decision Tree and Random Forest without tuning**
+
+**Decision tree before pruning**
+
+```{r classification_5 , echo=TRUE}
+library(rpart)
+library(rpart.plot)
+
+tree <- rpart(formula = RESPONSE~., data = credit_train_data, method = "class")
+printcp(tree)
+plotcp(tree)
+rpart.plot(tree)
+
+class_cnf_mtr_test<-table(predict(tree,credit_test_data,type="class"),credit_test_data$RESPONSE)
+sum(diag(class_cnf_mtr_test)) / sum(class_cnf_mtr_test)
+
+# confusion matrix for Decision tree without pruning 
+class_cnf_mtr_test 
+```
+
+**Decision tree after pruning**
+
+```{r class_tree_pruned_5 , echo = TRUE}
+
+cp_value = tree$cptable[which.min(tree$cptable[,"xerror"]),"CP"]
+pr_tree<-rpart(formula = RESPONSE~., data = credit_train_data, control = rpart.control(cp =cp_value))
+
+#pr_tree<-prune(tree,cp = tree$cptable[which.min(tree$cptable[,"xerror"]),"CP"])
+plotcp(pr_tree)
+rpart.plot(pr_tree)
+
+pru_cnf_mtr_test<-table(credit_test_data$RESPONSE,predict(pr_tree,credit_test_data,type="class"))
+
+# accuracy for Decision tree after pruning 
+sum(diag(pru_cnf_mtr_test)) / sum(pru_cnf_mtr_test)
+
+# confusion matrix for Decision tree after pruning 
+pru_cnf_mtr_test
+```
+
+**Decision tree find minsplit**
+
+```{r class_tree_min_split_5 , echo = TRUE}
+library(e1071)
+
+min_split_rpart <- tune.rpart(formula = RESPONSE~. , data = credit_train_data , minsplit = seq(1:100))
+
+plot(min_split_rpart , main = "tuned rpart on minsplit")
+val_min_split <- unlist(min_split_rpart$best.parameters)
+val_min_split
+
+pru_tree_2 <- rpart(formula = RESPONSE~., data = credit_train_data, control = rpart.control(minsplit = val_min_split , cp =cp_value))
+
+pru_cnf_mtr_test_2<-table(credit_test_data$RESPONSE,predict(pru_tree_2,credit_test_data,type="class"))
+# accuracy for Decision tree after pruning 
+sum(diag(pru_cnf_mtr_test_2)) / sum(pru_cnf_mtr_test_2)
+
+# confusion matrix for Decision tree after pruning 
+pru_cnf_mtr_test_2
+
+summary(pru_tree_2)
+```
+**Cost of the pruned decision tree**
+
+```{r pruned_tree_% , echo = TRUE}
+profit_pruning_dt <- sum(profit*pru_cnf_mtr_test)
+profit_pruning_dt
+```
+
+**Best nodes for classifying good applicats in above pruned tree is rightmost rule CHK_ACCT < 2 (NO) which has 45 percent chance of landing in that rule and gives result 1 with 0.85 confidence.Another rule CHK_ACCT < 2 (YES) -> SAVING_ACCT <2  -> amount < 1525 which gives 0.87 confidence of getting 1**
+
+### Random Forest 
+
+```{r rf_5 , echo = TRUE}
+library(randomForest)
+
+rf_tree <- randomForest(RESPONSE~.,credit_train_data, mtry = sqrt(ncol(credit_data)-1) , ntree = 500, type = "class",proximity = T,
+                        importance =T, replace = T)
+plot(rf_tree)
+print(rf_tree)
+
+rf_cnf_mtr_test<-table(credit_test_data$RESPONSE, predict(rf_tree,credit_test_data,type="class"))
+sum(diag(rf_cnf_mtr_test)) / sum(rf_cnf_mtr_test)
+
+# confusion matrix for random forest without parameter tuning
+rf_cnf_mtr_test
+```
+
+
+**Perform parameter tuning with ntree 225**
+```{r parameter_tuning_5 , echo=TRUE}
+tuned_rf <- tuneRF(credit_train_data[, -12], credit_train_data[,12],  ntreeTry = 225,improve=1e-5)
+```
+
+**RF after parameter tuning with ntree 225 , mtry value 2**
+
+```{r rf_after_pt_5 , echo= TRUE}
+#set.seed(1990)
+rf_tree_2 <- randomForest(RESPONSE~.,credit_train_data, mtry = 2 , ntree = 225 ,type = "class",proximity = T,
+                        importance =T, replace = T)
+plot(rf_tree_2)
+print(rf_tree_2)
+
+rf_2_cnf_mtr_test<-table(credit_test_data$RESPONSE, predict(rf_tree_2,credit_test_data,type="class"))
+sum(diag(rf_2_cnf_mtr_test)) / sum(rf_2_cnf_mtr_test)
+
+rf_2_cnf_mtr_test
+
+profit_pruning_rf_2 <- sum(profit*rf_2_cnf_mtr_test)
+profit_pruning_rf_2
+```
+
+### (c) Which model is a better model? Why?
+
+```{r model_compare_5 , echo = TRUE}
+## Profit for Decision tree after pruning 
+profit_pruning_dt
+
+## Profit for Random Forest after parameter tuning
+profit_pruning_rf_2
+```
+
+**From the above values of the profit for decision tree after pruning and random forest after paramter tuning we can see that profit for random forest is more.As we are aiming to increase the profit to maximum, random forest model is the better model.**
+
+### (d) The classes returned by your models are based on the cutoff point of 0.5.Can you improve the performance your model by changing this cutoff? Explain how you approach this.
+
+**ROC curves and AUC calculation (using the ROCR package)**
+
+```{r cutoff_d_5, echo = TRUE}
+library('ROCR')
+
+scoreTst=predict(rf_tree_2,credit_test_data, type="prob")[, '1']
+rocPredTst = prediction(scoreTst, credit_test_data$RESPONSE ,label.ordering = c('0', '1'))
+
+perfROCTst=performance(rocPredTst, "tpr", "fpr")
+plot(perfROCTst)
+
+eval = performance(rocPredTst , "acc")
+plot(eval)
+
+# Maximum Cut-off based on ROC/AUC curves  
+#max_value<- which.max(slot(eval,"y.values")[[1]])
+#acc <- slot(eval,"y.values")[[1]][max_value]
+#thres <- slot(eval,"x.values")[[1]][max_value]
+#print(c(accuacy=acc,threshold_or_cutoff=thres))
+#auc <- performance(rocPredTst,"auc")
+#auc <- unlist(slot(auc,"y.values"))
+#auc <- round(auc,4)
+#auc
+```
+
+**Cut-off threshhold based on Euclidean distance**
+```{r decidethreshold_5 , echo=TRUE}
+fxn<- function(x,y,p) {
+  
+  d<-sqrt(( (x-0)^2  ) +  ( (y-1  )^2 ))
+  index<-which(d==min(d))
+  c(recall = y[[index]],specificity= 1-x[[index]] ,cutoff = p[[index]])
+}
+
+perfROCTst@alpha.values
+mapply(fxn,perfROCTst@x.values,perfROCTst@y.values,perfROCTst@alpha.values)
+```
+
+**To find the threshhold cutoff, we plotted ROC curve. we need to find the point on the graph which is at the minimum distance from best possible graph. Hence we calculate the euclidean distance of point on the graph of minimum value to get the cut off value. There is always a trade off between the false positive and true +ve, we choose where we get minimum value.**
+
+### (e) Summarize your findings.
+
+**Based on the problem statement and the data set we want to reduce the false positive cases as the cost for FP is greater and will impact the outcome of the model in bad way.To achieve same we followed below steps:**
+**(i) We started with analysing the data, by creating the box plots and looking at the structure.As our target variable is factor  (binary outcome) we used logisitic regression to find the relationships between our depenedent and independent variables. We then reduced our data to use only to dependent variables which are statisitically significant.**
+**(ii)Then we created first decision tree with default values to find the best cp values.Using those cp values we found the minsplit value for the tree and created our pruned decision tree.**
+**(iii)After creating decision tree, we created random forest after performing paramter tuning.After setting one ntree value to 225 we were able to find the good accuracy of the model and then tuned mtry parameter and created rf with oob error 22.3% and accuracy of 74.3.**
+**(iv)In this case, we are more interested towards increasing the profit of our model, we calculated the profit of decision tree and random forest after tuning.**
+**From the profit table we can see that profit for the random forest was better than normal decision after performing the tuning on paramteres needed in both models.**
