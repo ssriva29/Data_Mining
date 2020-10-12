@@ -1,0 +1,94 @@
+---
+title: "Assignment-5"
+date: "12/3/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Problem 3: (a) Use the K-means method to cluster the prospects dataset. Set the number of clusters to four.How many points are in each cluster? What are cluster means and variances?
+
+```{r kmeans_data, echo=TRUE}
+library(readxl)
+
+prospect_data <- read_excel("/Users/Downloads/FAll 2019/IDS-572 DataMining/Assignment_5/prospect.xls")
+clust_data <- prospect_data[,-c(1,7)]
+
+# data cleaning
+dim(clust_data)
+
+#check if any missing values 
+sum(is.na(clust_data))
+
+clust_data_na_removed <- data.frame(na.omit(clust_data))
+dim(clust_data_na_removed)
+```
+
+```{r kmeans_a, echo=TRUE}
+set.seed(123456)
+
+library(dplyr)
+glimpse(clust_data_na_removed)
+
+clust_data_na_removed[,3] <- as.factor(clust_data_na_removed[,3])
+clust_data_na_removed[,4] <- as.factor(clust_data_na_removed[,4])
+clust_data_na_removed[,5] <- as.factor(clust_data_na_removed[,5])
+clust_data_na_removed[,6] <- as.factor(clust_data_na_removed[,6])
+
+library(e1071)
+
+kmeans_model <- kproto(clust_data_na_removed,k=4, nstart = 20)
+
+#Size of each cluster
+kmeans_model$size
+#centroids 
+kmeans_model$centers
+```
+
+### (b) For each of the four clusters, briefly describe the characteristics of members of that cluster.
+
+```{r part_b_kmeans, echo=TRUE}
+```
+
+### (c) What is the best value of k for this data set??
+
+```{r kmeans_part_c,echo=TRUE}
+bestkplot <- function(data, nc=25, seed=1234){
+  wss <- (nrow(data)-1)*sum(apply(data,2,var))
+  
+  for (i in 2:nc){
+    set.seed(seed)
+    wss[i] <- sum(kproto(data, k=i)$withinss)
+  }
+  
+  plot(1:nc, wss, type="b", xlab="Number of Clusters",ylab="Within groups sum of squares")
+}
+
+bestkplot(clust_data_na_removed, nc=25) 
+
+# 2-D representation for the clusters
+
+library(cluster)
+
+clusplot(clust_data_na_removed, kmeans_model$cluster, main='2D representation of the Cluster solution',color=FALSE, shade=FALSE,
+         labels=2, lines=0,diss = FALSE)
+```
+
+**Best value of k should be 5 as it is giving the least dip in sum of square error witihn the groyps**
+
+### (d) What is the Silhouette measure of the clusters obtained by best k in part (c).
+
+```{r kmeans_part_d, echo=TRUE}
+library(cluster)
+library(factoextra)
+
+set.seed(45453)
+k_means_model_best_k <- kproto(clust_data_na_removed, k=5)
+#sil_coeff <- silhouette(kmeans_model$cluster, dist(clust_data_na_removed))
+sil_coeff <- silhouette(k_means_model_best_k$cluster, dist(clust_data_na_removed))
+fviz_silhouette(sil_coeff)
+```
+
+**Average silhouette width is 0.04.**
