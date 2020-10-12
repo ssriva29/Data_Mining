@@ -1,0 +1,166 @@
+## Problem 7
+
+### (a) Load the data and check the attributes of the data. How many variables are in this data set?
+
+```{r load_data_ques_7, echo = TRUE}
+library(readxl)
+pid_data <- read_excel("/Users/pawanjeetkaur/Downloads/IDS-572 DataMining/assignment_1/Pima Indian Diabetes.xlsx")
+
+colnames(pid_data) <- c('preg_count', 'plas_conc','bp','tsf_thick', 'ins', 'bmi', 'dpf', 'age', 'class')
+pid_data$class<-as.factor(pid_data$class)
+dim(pid_data)
+```
+
+**There are 9 varialbes : 8 independent variables and 1 dependent variable.**
+
+### (b) Choose the first 80% of the data for training and the remaining 20% data for testing.
+
+```{r data_clean , echo= TRUE}
+library(ggplot2)
+
+# Check any missing values 
+library(mice)
+md.pattern(pid_data)
+
+library(VIM)
+aggr_plot = aggr(pid_data, col = c('aquamarine4', 'brown3'), numbers = TRUE, prop = TRUE, sortVars= TRUE, labels = names(pid_data), cex.axis = 1, gap = 0, ylab = c("Histogram of missing data", "Pattern"))
+
+# Check any outliers using histograms 
+par(mfrow=c(2,3))
+
+boxplot(pid_data$plas_conc, main='Plasma concentration Review', ylab = "Frequenccy")
+boxplot(pid_data$bp, main='BP Review', ylab = "Frequency")
+boxplot(pid_data$tsf_thick, main='tsf_thickness Review', ylab = "Frequency")
+boxplot(pid_data$bmi, main='BMI Review', ylab = "Frequency")
+boxplot(pid_data$dpf, main='dpf Review', ylab = "Frequency")
+boxplot(pid_data$age, main='AGE Review', ylab = "Frequency")
+
+# Removing outliers 
+library(dplyr)
+library(tidyr)
+library(purrr)
+
+outlierreplacement <- function(dataframe){
+  dataframe %>%          
+    map_if(is.numeric, ~ replace(.x, .x %in% boxplot.stats(.x)$out, NA)) %>%
+    bind_cols 
+}
+pid_data <- outlierreplacement(pid_data)
+pid_data <- na.omit(pid_data)
+
+#Perform the random ordering of Dataset to get good mix of data in traning and test (set seed before any random operation)
+set.seed(1990)
+
+random_ordering<-runif(nrow(pid_data))
+pid_data = pid_data[order(random_ordering),]
+
+set.seed(12345)
+library(caTools)
+split = sample.split(pid_data,SplitRatio = 0.80)
+
+train_pid_data=subset(pid_data, split==TRUE)
+test_pid_data =subset(pid_data, split==FALSE)
+
+dim(train_pid_data)
+dim(test_pid_data)
+
+prop.table(table(train_pid_data$class))
+prop.table(table(pid_data$class))
+```
+
+### (c) Use “rpart” function to create a tree using the training data . What is the accuracy of your model based on training data?
+
+```{r rpart_tree , echo= TRUE}
+library(rpart)
+library(rpart.plot)
+
+fit <- rpart(class~., data = train_pid_data, method = "class")
+
+predict_test_data <-predict(fit, test_pid_data, type = 'class')
+
+predict_train_data <-predict(fit, train_pid_data, type = 'class')
+table_mat_train <- table(train_pid_data$class, predict_train_data)
+table_mat_train
+
+accuracy_train <- sum(diag(table_mat_train))/sum(table_mat_train)
+accuracy_train
+fit
+```
+
+### (d) Plot your decision tree. How many leaves are in your tree? Are these leaves pure?
+
+```{r plot_tree, echo = TRUE}
+rpart.plot(fit)
+```
+
+***There are 13 leaves in the decision tree. Yes, all 13 leaves are pure leaves.**
+
+### (e) Provide two strongest If-Then rules from this decision tree. Please explain why these rules are chosen.
+
+***Rules on left most and rightmost of the tree are leaf nodes with highest probability i.e. check on plasma concentration< 102. Second bmi<30 takes us to leaf node with probability 17 percent.**
+
+### (f) What are the most important variables based on your decision tree models?
+
+**Most important variables based on above decision tree are plasma_concentration , bmi and age of the dataset.**
+
+### (g) Apply the decision tree on test data and report your prediction (just the code is sufficient for this part). What is the accuracy of your model on the test data?
+
+```{r test_accuracy , echo = TRUE}
+table_mat_test <- table(test_pid_data$class, predict_test_data)
+table_mat_test
+
+# What is the accuracy of your model on the test data?
+accuracy <- sum(diag(table_mat_test))/sum(table_mat_test)
+accuracy
+```
+
+### (h) Use a couple of different training samples and check how your decision tree models change. Is your decision tree robust?
+
+``` {r more_examples , echo = TRUE}
+### second set of data
+set.seed(1990)
+
+random_ordering_1<-runif(nrow(pid_data))
+pid_data = pid_data[order(random_ordering_1),]
+
+train_pid_data_1=subset(pid_data, split==TRUE)
+test_pid_data_1 =subset(pid_data, split==FALSE)
+
+
+fit_1 <- rpart(class~., data = train_pid_data_1, method = "class")
+rpart.plot(fit_1)
+
+predict_train_data_1 <-predict(fit_1, train_pid_data_1, type = 'class')
+table_mat_1 <- table(train_pid_data_1$class, predict_train_data_1)
+
+accuracy_1 <- sum(diag(table_mat_1))/sum(table_mat_1)
+accuracy_1
+```
+
+**On running the decision tree on multiple datasets we can see that there is not much difference with accuracy of the graphs which makes us think that tree is robust**
+
+### (i.c) Do parts (c), (e), and (f) for a “ctree” function as well. Are there any significant differences between these decision trees constructed by ctree and rpart?
+
+```{r ctree_plot, echo = TRUE}
+library(party)
+treec <- ctree(class~.,data = train_pid_data)
+
+plot(treec)
+
+tr <- predict(treec, test_pid_data)
+table_mat_1 <- table(test_pid_data$class, tr)
+
+# What is the accuracy of your model on the test data?
+accuracy <- sum(diag(table_mat_1))/sum(table_mat_1)
+accuracy
+```
+
+**The top important variables are same in both ctree and decision tree whereas, number of leaf nodes are different in both trees.**
+
+
+### (i.e) Provide two strongest If-Then rules from this decision tree. Please explain why these rules are chosen
+
+***Rules on left most and rightmost of the tree are leaf nodes with highest probability i.e. check on plasma concentration< 102 and pas_Conc greater than 142 rightmost branch leading to leaf node.**
+
+### (i.f) What are the most important variables based on your decision tree models?
+***Important variables in above graph are plasma concentration and bmi which comes on the top of the tree**
