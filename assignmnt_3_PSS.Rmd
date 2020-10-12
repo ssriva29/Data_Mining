@@ -1,0 +1,480 @@
+---
+title: "assignment_3"
+
+date: "11/13/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r load_data, echo=TRUE}
+train_data <- data.frame(read.csv("~/Downloads/IDS-572 DataMining/assignment 3/IMB 623 VMWare- Digital Buyer Journey/Training.csv"))
+test_data <- data.frame(read.csv("~/Downloads/IDS-572 DataMining/assignment 3/IMB 623 VMWare- Digital Buyer Journey/Validation.csv"))
+
+set.seed(123455)
+```
+
+```{r clean_na, echo=TRUE}
+library(dplyr)
+library(purrr)
+library(tidyr)
+
+#glimpse(train_data)
+
+# find columns with NA values  -----------------------------------------
+na_threshold <- 70
+target_index <- grep("target", colnames(train_data))
+train_X <- train_data[, - target_index]
+target <- train_data$target
+
+countNAPercentage <- function(x) {
+ (sum(is.na(x))/nrow(train_data))* 100
+}
+
+out <- as.data.frame(sapply(train_X, countNAPercentage))
+
+remove_na <- which(out[,1] > na_threshold)
+length(remove_na)
+
+train_removed_na <- train_X[,-remove_na]
+dim(train_removed_na)
+```
+
+
+```{r clean_999, echo=TRUE}
+threshhold_999 <- 70
+
+count9999 <- function(x) {
+    count <- which(x == 9999)
+    (length(count)/nrow(train_data))*100
+}
+
+index_9999 <- data.frame(sapply(train_removed_na, count9999))
+remove_9999 <- which(index_9999[,1] > threshhold_999)
+length(remove_9999)
+
+train_removed_9999 <- train_removed_na[,-remove_9999]
+
+dim(train_removed_9999)
+```
+
+```{r remove_uk, echo=TRUE}
+uk_data <- function(x) {
+  count <- which(x == "Unknown")
+  (length(count)/nrow(train_data))*100
+}
+
+index_uk <- data.frame(sapply(train_removed_9999, uk_data))
+remove_uk <- which(index_uk[,1] > 50)
+length(remove_uk)
+
+train_removed_uk <- train_removed_9999[,-remove_uk]
+
+dim(train_removed_uk)
+```
+
+```{r sd_var , echo=TRUE}
+count_distinct <- function(x) {
+  sd(x)
+}
+
+factor_col <- data.frame(sapply(train_removed_uk, is.factor))
+factor_col_index <- which(factor_col[,1] == TRUE)
+
+train_remove_sd <- train_removed_uk[,-factor_col_index]
+
+index_distinct <- data.frame(sapply(train_remove_sd, count_distinct))
+remove_distinct <- which(index_distinct[,1] == 0)
+length(remove_distinct)
+
+train_removed_sd_0<- data.frame(train_remove_sd[,-remove_distinct], train_removed_uk[,factor_col_index])
+
+dim(train_removed_sd_0)
+```
+
+```{r imputeData , echo=TRUE}
+impute.med <- function(x) {
+  if(is.numeric(x) && any(is.na(x))){
+    z <- median(x, na.rm = TRUE)
+    x[is.na(x)] <- z
+    return(x)
+  }
+  else {
+    x
+  }
+}
+
+train_impute_replace <- train_removed_sd_0
+
+factor_col <- data.frame(sapply(train_removed_sd_0, is.factor))
+factor_col_index <- which(factor_col[,1] == TRUE)
+
+train_impute_replace[,-factor_col_index] <- as.data.frame(sapply(train_removed_sd_0[,-factor_col_index], impute.med))
+
+final_data <- data.frame(train_impute_replace, target)
+```
+
+```{r var_sel , echo=TRUE}
+factor_col_final <- data.frame(sapply(final_data, is.factor))
+factor_col_index_final <- which(factor_col_final[,1] == TRUE)
+
+final_X <- final_data[, - factor_col_index_final]
+target_index_1 <- grep("target", colnames(final_X))
+final_X <- final_X[, -target_index_1]
+
+target <-final_data$target
+length(target)
+
+final <- data.frame(final_X , target)
+dim(final)
+```
+
+
+```{r high_cor, echo=TRUE}
+## Check for highly correlated fields -----------------------------------------
+dim(final)
+
+cor_mat <- data.frame(colnames(final),cor(final, final[,438]))
+
+remove_cor <- which(cor_mat[,2] > 0.60 & cor_mat[,2] != 1)
+length(remove_cor)
+#length(cor_op)
+
+final <- final[,-remove_cor]
+dim(final)
+
+library(ranger)
+ranger_op <- ranger(formula = target ~., data = final , importance = 'impurity', verbose = T, num.trees = 500)
+
+dim(final)
+ncol(final)
+
+var_imp <- data.frame(colnames(final[,-c(ncol(final))]),ranger_op$variable.importance)
+colnames(var_imp)<-c("column","importance")
+
+var_imp <- var_imp[order(-var_imp$importance),][1:100,]
+
+# pick only top 100 variables
+call_index <- function(x, data = final) { 
+  which(colnames(data) == x)
+}
+
+var_index_2<- unlist(sapply(var_imp[,1],call_index))
+length(factor_col_index_final)
+data <- data.frame(final[,var_index_2],final_data[,factor_col_index_final],target)
+```
+
+```{r bor_op, eval=FALSE, include=FALSE}
+# variable selection using Boruta  -----------------------------------------
+bor_op <- data.frame(c ("tot_page_views",	"tot_page_views_l30d",	"tot_page_views_l90d",	"tot_visits",	
+                        "tot_visits_l30d",	"tot_visits_l90d",	"log_in_events",	"product_view_events",	
+                        "checkout_s1_events",	"purchase_events",	"natural_search_events",	
+                        "file_download_events",	"tot_google_browser_page_views",	"tot_internal_ref_page_views",	
+                        "tot_search_engine_ref_page_views",	"tot_other_ref_page_views",	"tot_windows_page_views",	
+                        "tot_google_se_page_views",	"tot_prod10_blog_page_views",	"tot_first_touch_direct_views",	
+                        "tot_last_touch_natural_search_views",	"tot_last_touch_direct_views",	"tot_last_touch_internal_views",	
+                        "tot_last_touch_referring_domain_views",	"pdf_downloads",	"tot_prod10_downloads",	"tgt_hol",
+                        "tgt_webinar",	"tgt_whitepaper",	"tgt_download",	"masked_email",	"ftr_dummy_db_industryUnknown",
+                        "tgt_first_date_hol_page_view",	"tgt_first_date_eval_page_view",	"tgt_first_date_webinar_page_view",	
+                        "tgt_first_date_whitepaper_download",	"tgt_first_date_any_download",	"tgt_more_than1"))
+
+
+bar_op_index<- unlist(sapply(bor_op[,1],call_index, final_data))
+data_bor <- data.frame(final_data[,bar_op_index],target)
+data <-data_bor
+```
+
+```{r remove_na_cat , echo=TRUE}
+factor_col_final_cd <- data.frame(sapply(data, is.factor))
+factor_col_index_final_cd <- which(factor_col_final_cd[,1] == TRUE)
+
+data[,factor_col_index_final_cd] <- lapply(data[, factor_col_index_final_cd], function(.){
+  levels(.) <- c(levels(.), "None")
+  replace(., is.na(.), "None")
+})
+dim(data)
+```
+
+```{r smote_data , echo=TRUE}
+# to show unbalanced classes 
+table(train_data$target)
+
+library(UBL)
+data$target <- as.factor(data$target)
+
+data <- SmoteClassif(target ~ ., data, C.perc = "balance", dist = "HEOM")
+
+# To show balanced classes
+table(data$target)
+```
+
+```{r scale_data, echo= TRUE}
+# scaling values ----------------------------------------------------------------
+numeric_col_final <- data.frame(sapply(data, is.numeric))
+numeric_col_index_final <- which(numeric_col_final[,1] == TRUE)
+
+scale(data[, numeric_col_index_final], center = TRUE, scale= TRUE)
+#summary(data)
+```
+
+```{r remove_levels, echo= TRUE}
+level_list <- data.frame(sapply(data, function(x) {
+   if(!is.numeric(x)) {
+     length(levels(x)) > 40  
+   }
+   else {
+     FALSE
+   }
+}))
+
+levels_final <- which(level_list[,1] == TRUE)
+
+data_one <- data
+data <- data[,-levels_final]
+```
+
+```{r dummy_data , echo=TRUE}
+col_final_list <- data.frame(colnames(data))
+final_cols_train <- unlist(sapply(col_final_list[,1], call_index , test_data))
+
+test_data_bor <-data.frame(test_data[,final_cols_train])
+
+test_data_bor$target <- as.factor(test_data_bor$target)
+
+## Create dummy data for categorical variables  ------------------------------------------------
+target <- data$target
+target
+data <- data[, -ncol(data)]
+dim(data)
+
+library(caret)
+
+dummies <- dummyVars(~ ., data = data)
+mtrain = predict(dummies, newdata = data)
+data <- data.frame(mtrain, target)
+dim(data)
+```
+
+```{r  createTestData, echo=TRUE}
+numeric_col_final_test <- data.frame(sapply(test_data_bor, is.numeric))
+numeric_col_index_final_test <- which(numeric_col_final_test[,1] == TRUE)
+#numeric_col_index_final_test
+test_data_bor[,numeric_col_index_final_test] <- sapply(test_data_bor[,numeric_col_index_final_test], 
+                                                       as.numeric)
+
+dim(test_data_bor)
+target <- test_data_bor$target
+
+factor_col_final_cd_test <- data.frame(sapply(test_data_bor[,-ncol(test_data_bor)], is.factor))
+factor_col_index_final_cd_test <- which(factor_col_final_cd_test[,1] == TRUE)
+
+test_data_bor[,factor_col_index_final_cd_test] <- lapply(test_data_bor[, factor_col_index_final_cd_test], function(.){
+  levels(.) <- c(levels(.), "None")
+  replace(., is.na(.), "None")
+})
+
+
+#glimpse(test_data_bor)
+dummies_test <- dummyVars(~ ., data = test_data_bor[,-ncol(test_data_bor)])
+mtrain_c = predict(dummies_test, newdata = test_data_bor[,-ncol(test_data_bor)])
+test_data_bor <- data.frame(mtrain_c,target)
+dim(test_data_bor)
+```
+
+```{r data_for_xgboost, echo=TRUE}
+numeric_col_final_test <- data.frame(sapply(test_data_bor, is.numeric))
+numeric_col_index_final_test <- which(numeric_col_final_test[,1] == TRUE)
+#numeric_col_index_final_test
+test_data_bor[,numeric_col_index_final_test] <- sapply(test_data_bor[,numeric_col_index_final_test], 
+                                                       as.numeric)
+
+dim(test_data_bor)
+target_test <- test_data_bor$target
+
+factor_col_final_cd_test <- data.frame(sapply(test_data_bor[,-ncol(test_data_bor)], is.factor))
+factor_col_index_final_cd_test <- which(factor_col_final_cd_test[,1] == TRUE)
+
+test_data_bor[,factor_col_index_final_cd_test] <- lapply(test_data_bor[, factor_col_index_final_cd_test], function(.){
+  levels(.) <- c(levels(.), "None")
+  replace(., is.na(.), "None")
+})
+
+
+glimpse(test_data_bor)
+dummies_test <- dummyVars(~ ., data = test_data_bor[,-ncol(test_data_bor)])
+mtrain_c = predict(dummies_test, newdata = test_data_bor[,-ncol(test_data_bor)])
+test_data_bor <- data.frame(mtrain_c,target)
+dim(test_data_bor)
+
+library(xgboost)
+library(caret)
+target <- data$target
+
+xg_data <- data
+xg_validate <- test_data_bor
+
+#dim(xg_data)
+#dim(xg_validate)
+#summary(xg_validate$target)
+
+target_class <- xg_data$target
+target_validate_class <- xg_validate$target
+
+label <- as.integer(xg_data$target)-1
+validate_label <- as.integer(xg_validate$target)-1
+
+xg_data$target = NULL
+xg_validate$target = NULL
+
+n = nrow(xg_data)
+train.index = sample(n,floor(0.75*n))
+train.data = as.matrix(xg_data[train.index,])
+train.label = label[train.index]
+
+test.data = as.matrix(xg_data[-train.index,])
+test.label = label[-train.index]
+
+validate.data = as.matrix(xg_validate)
+validate.label = validate_label
+
+xgb.train = xgb.DMatrix(data=train.data,label=train.label)
+xgb.test = xgb.DMatrix(data=test.data,label=test.label)
+xgb.validate = xgb.DMatrix(data=validate.data, label = validate.label)
+```
+
+```{r runRF , echo = TRUE}
+library(randomForest)
+data$target <- as.factor(data$target)
+table(data$target)
+
+rf_model <- randomForest(formula=target~. , data = data,do.trace = TRUE,mtry = sqrt(ncol(data)-1), ntree = 100)
+rf_model
+plot(rf_model)
+target_col <- grep("target", colnames(data))
+tuned_rf <- tuneRF(data[, -target_col], data$target,  ntreeTry = 20,improve=0.05)
+
+rf_model_tuned <- randomForest(formula=target~. , data = data,do.trace = TRUE,mtry = 20, ntree = 20)
+
+pred_op_rf <- predict(rf_model_tuned, newdata = test_data_bor)
+pred_op_tr <- predict(rf_model_tuned, newdata = data)
+
+acc_ranger_rf <- table(pred_op_rf, test_data_bor$target)
+acc_train <- table(pred_op_tr, data$target)
+
+sum(diag(acc_ranger_rf))/sum(acc_ranger_rf)
+sum(diag(acc_train))/sum(acc_train)
+```
+
+```{r runGLMRIDGE, echo= TRUE}
+# GLMNET -----------------------------------------------------------------------
+
+library(glmnet)
+library(mltools)
+require(data.table)
+
+dim(data)
+ncol(data)
+
+data_X <- as.data.table(data[,-ncol(data)])
+test_data_X <- as.data.table(test_data_bor[,-ncol(test_data_bor)])
+
+sparse_matrix_x <- sparsify(data_X)
+sparse_matrix_test_x <- sparsify(test_data_X)
+
+### RIDGE ######
+glm_mod <- cv.glmnet(sparse_matrix_x, data$target, family= "multinomial",grouped = TRUE,
+                     type.measure = "class", trace.it = 1, alpha= 0,nfolds = 5)
+
+plot(glm_mod, xvar="lambda", label=TRUE)
+plot(glm_mod$glmnet.fit,xvar="lambda",label=TRUE)
+plot(glm_mod$glmnet.fit, "norm", label=TRUE)
+
+lm_1 <- glm_mod$lambda.min
+
+glm_mod_best <- glmnet(sparse_matrix_x, data$target, family= "multinomial",grouped = TRUE,type.measure = "class", trace.it = 1, nfolds = 5, alpha = 0, lambda = lm_1)
+
+pred_op <- predict(glm_mod_best, newx = sparse_matrix_test_x, s="lambda.min", type = c("class"))
+
+acc_glm <- table(pred_op, test_data_bor$target)
+glm_acc <- sum(diag(acc_glm))/sum(acc_glm)
+glm_acc
+```
+
+```{r runglmnetridge, echo = TRUE}
+glm_mod_ridge <- cv.glmnet(sparse_matrix_x, data$target, family= "multinomial",grouped = TRUE,type.measure = "class", trace.it = 1, alpha= 1,nfolds = 5)
+
+plot(glm_mod_ridge, xvar="lambda", label=TRUE)
+plot(glm_mod_ridge$glmnet.fit,xvar="lambda",label=TRUE)
+plot(glm_mod_ridge$glmnet.fit, "norm", label=TRUE)
+
+lm_1 <- glm_mod_ridge$lambda.min
+lm_1
+glm_mod_best_ridge <- glmnet(sparse_matrix_x, data$target, family= "multinomial",grouped = TRUE,type.measure = "class", trace.it = 1, nfolds = 5, alpha = 0, lambda = lm_1)
+
+pred_op_ridge <- predict(glm_mod_best_ridge, newx = sparse_matrix_test_x, s="lambda.min", type = c("class"))
+
+acc_glm_ridge <- table(pred_op_ridge, test_data_bor$target)
+glm_acc_ridge <- sum(diag(acc_glm_ridge))/sum(acc_glm_ridge)
+glm_acc_ridge
+```
+
+```{r runXGBOOST, echo=TRUE}
+num_class = length(levels(target))
+params = list(
+  booster="gbtree",
+  eta=0.001,
+  max_depth=5,
+  gamma=3,
+  subsample=0.75,
+  colsample_bytree=1,
+  objective="multi:softprob",
+  eval_metric="mlogloss",
+  num_class=num_class
+)
+
+# Train the XGBoost classifer
+xgb.fit=xgb.train(
+  params=params,
+  data=xgb.train,
+  nrounds=200,
+  early_stopping_rounds=10,
+  watchlist=list(val1=xgb.train,val2=xgb.test),
+  verbose=1
+)
+
+xgb.fit
+
+xgb.pred = predict(xgb.fit,test.data,reshape=T)
+xgb.pred
+xgb.pred = as.data.frame(xgb.pred)
+colnames(xgb.pred) = levels(target)
+xgb.pred
+
+xgb.pred$prediction = apply(xgb.pred,1,function(x) colnames(xgb.pred)[which.max(x)])
+xgb.pred$label = levels(target)[test.label+1]
+xgb.pred
+
+data.frame(xgb.pred$prediction , xgb.pred$label)
+result = sum(xgb.pred$prediction==xgb.pred$label)/nrow(xgb.pred)
+print(paste("Final Accuracy =",sprintf("%1.2f%%", 100*result)))
+
+# prediction of xgb on validation set
+xgb.pred_validate = predict(xgb.fit,validate.data,reshape=T)
+xgb.pred_validate
+xgb.pred.validate = as.data.frame(xgb.pred_validate)
+#levels(test_data_bor$target)
+colnames(xgb.pred.validate) = levels(target_validate_class)
+length(xgb.pred.validate)
+
+xgb.pred.validate$prediction = apply(xgb.pred.validate,1,function(x) colnames(xgb.pred.validate)[which.max(x)])
+xgb.pred.validate$label = levels(target)[validate.label+1]
+xgb.pred.validate
+
+data.frame(xgb.pred.validate$prediction , xgb.pred.validate$label)
+result_validate = sum(xgb.pred.validate$prediction==xgb.pred.validate$label)/nrow(xgb.pred.validate)
+print(paste("Final Accuracy =",sprintf("%1.2f%%", 100*result_validate)))
+```
